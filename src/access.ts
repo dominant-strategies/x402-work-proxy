@@ -6,7 +6,11 @@ const encoder = new TextEncoder();
 export const COOKIE = "x402_work_access";
 
 const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const fromBase64url = (text: string) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+// atob accepts unpadded input per the WHATWG spec; the padding is restored for runtimes that don't.
+const fromBase64url = (text: string) => {
+	const base64 = text.replace(/-/g, "+").replace(/_/g, "/");
+	return Uint8Array.from(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+};
 
 async function hmac(secret: string, data: string): Promise<Uint8Array> {
 	const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

@@ -28,19 +28,24 @@ export interface Env {
 
 const RESERVED = "/__x402/";
 
+/** A variable's value, or undefined when it's unset or blank (an empty var means "use the default"). */
+const value = (text: string | undefined) => text?.trim() || undefined;
+
 export function settings(env: Env) {
-	const access = Number(env.ACCESS_SECONDS ?? 3600);
+	// Number("") is 0, which would silently mean "charge every request".
+	const accessText = value(env.ACCESS_SECONDS);
+	const access = accessText === undefined ? 3600 : Number(accessText);
 	return {
-		payTo: (env.PAY_TO ?? "").trim(),
-		price: (env.PRICE ?? "4096").trim(),
-		profile: (env.PROFILE ?? "quai/sha256d-v1").trim(),
+		payTo: value(env.PAY_TO) ?? "",
+		price: value(env.PRICE) ?? "4096",
+		profile: value(env.PROFILE) ?? "quai/sha256d-v1",
 		patterns: (env.PROTECTED_PATTERNS ?? "")
 			.split(",")
 			.map((p) => p.trim())
 			.filter(Boolean),
-		origin: env.ORIGIN_URL?.trim() || undefined,
+		origin: value(env.ORIGIN_URL),
 		accessSeconds: Number.isSafeInteger(access) && access >= 0 ? access : 3600,
-		facilitator: env.FACILITATOR_URL?.trim() || undefined,
+		facilitator: value(env.FACILITATOR_URL),
 		secret: env.JWT_SECRET && env.JWT_SECRET.length >= 32 ? env.JWT_SECRET : undefined,
 	};
 }
@@ -140,7 +145,11 @@ export default {
 			});
 		} catch (error) {
 			if (!(error instanceof WorkSellerError)) throw error;
-			return json(error.status, { error: { message: error.message, code: error.code } }, { "retry-after": String(error.retryAfter ?? 30) });
+			// Outages and rate limits are worth retrying. Anything else means the facilitator refused
+			// this proxy's own settings, which is not the buyer's fault and won't change on retry.
+			if (error.status === 429 || error.status === 503)
+				return json(error.status, { error: { message: error.message, code: error.code } }, { "retry-after": String(error.retryAfter ?? 30) });
+			return json(502, { error: { message: `The facilitator refused this proxy's settings: ${error.message}`, code: error.code } });
 		}
 
 		if (!charged.paid) {

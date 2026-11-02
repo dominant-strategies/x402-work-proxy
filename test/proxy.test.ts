@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import worker, { isProtected, type Env } from "../src/index";
+import worker, { isProtected, settings, type Env } from "../src/index";
 import { COOKIE, hasAccess, issueAccess } from "../src/access";
 
 const PAY_TO = "0x007f5aC8d9D06a27565172cB75F8e5589074f8E4";
@@ -53,6 +53,16 @@ describe("routes", () => {
 		const placeholder = await call("/__x402/health", {}, env({ PAY_TO: "0x" + "0".repeat(40) }));
 		expect(placeholder.status).toBe(500);
 		expect(((await placeholder.json()) as any).problem).toMatch(/placeholder zero address/);
+	});
+
+	test("blank variables fall back to their defaults instead of becoming 0 or empty", () => {
+		const s = settings(env({ ACCESS_SECONDS: "", PRICE: " ", PROFILE: "", ORIGIN_URL: " " }));
+		expect(s.accessSeconds).toBe(3600);
+		expect(s.price).toBe("4096");
+		expect(s.profile).toBe("quai/sha256d-v1");
+		expect(s.origin).toBeUndefined();
+		expect(settings(env({ ACCESS_SECONDS: "0" })).accessSeconds).toBe(0);
+		expect(settings(env({ ACCESS_SECONDS: "-5" })).accessSeconds).toBe(3600);
 	});
 
 	test("unprotected requests go straight to the origin without our headers", async () => {
@@ -129,6 +139,21 @@ describe("payment", () => {
 		expect(((await response.json()) as any).error).toBe("The work was already spent");
 	});
 
+	test("a facilitator that refuses the proxy's settings is a 502 without Retry-After", async () => {
+		facilitator = () => Response.json({ error: { message: "Unsupported profile" } }, { status: 400 });
+		const response = await call("/report");
+		expect(response.status).toBe(502);
+		expect(response.headers.get("retry-after")).toBeNull();
+		expect(((await response.json()) as any).error.message).toMatch(/refused this proxy's settings: Unsupported profile/);
+	});
+
+	test("a rate-limited proxy passes on 429 with Retry-After", async () => {
+		facilitator = () => Response.json({ error: { message: "Slow down" } }, { status: 429, headers: { "retry-after": "7" } });
+		const response = await call("/report");
+		expect(response.status).toBe(429);
+		expect(response.headers.get("retry-after")).toBe("7");
+	});
+
 	test("an unavailable facilitator is a 503 with Retry-After, and nothing reaches the origin", async () => {
 		facilitator = () => Response.json({ error: { message: "No live work source" } }, { status: 503, headers: { "retry-after": "12" } });
 		const response = await call("/report");
@@ -150,5 +175,14 @@ describe("access cookie", () => {
 		const forged = btoa(JSON.stringify({ aud: "proxy.example", exp: 9e9 })).replace(/=+$/, "");
 		expect(await hasAccess(SECRET, "proxy.example", `${h}.${forged}.${s}`, now)).toBe(false);
 		expect(await hasAccess(SECRET, "proxy.example", "garbage", now)).toBe(false);
+	});
+
+	test("validates tokens whose unpadded parts have every length remainder", async () => {
+		// Hosts of 1 to 4 extra characters move the payload's base64url length through 0, 2 and 3 (mod 4).
+		for (const host of ["a.example", "ab.example", "abc.example", "abcd.example"]) {
+			const token = await issueAccess(SECRET, host, 60);
+			expect(token).not.toContain("=");
+			expect(await hasAccess(SECRET, host, token)).toBe(true);
+		}
 	});
 });
