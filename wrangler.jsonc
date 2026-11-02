@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "x402-work-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "vars": {
+    // Your Cyprus-1 QUAI address. Block rewards from network-grade answers go here.
+    "PAY_TO": "0x0000000000000000000000000000000000000000",
+    // Price of one access in expected guesses (quai/sha256d-v1: a CPU makes millions a second).
+    "PRICE": "4096",
+    "PROFILE": "quai/sha256d-v1",
+    // Paths that require payment: "/premium/*" is a prefix, "/report" exact, "*" everything.
+    // /__x402/protected is always protected, as a demo.
+    "PROTECTED_PATTERNS": "",
+    // Where requests go once paid (and unprotected requests always): your site or API.
+    "ORIGIN_URL": "",
+    // How long one payment grants access, in seconds. 0 charges every request.
+    "ACCESS_SECONDS": "3600"
+  }
+  // Secret: wrangler secret put JWT_SECRET (32+ random characters) to issue access cookies.
+}

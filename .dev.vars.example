@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+JWT_SECRET=replace-with-32-or-more-random-characters
