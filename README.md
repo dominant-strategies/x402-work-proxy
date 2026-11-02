@@ -93,7 +93,11 @@ A browser gets a short page explaining the payment, with a 402 status and the jo
   SameSite=Lax`. No state is stored.
 - **A rejected or replayed proof** gets a fresh 402 that says why.
 - **If the facilitator is unreachable** or has no live work source, the proxy answers 503 with
-  `Retry-After`. Nothing is charged, and nothing reaches your origin.
+  `Retry-After` (or passes on its 429). Nothing is charged, and nothing reaches your origin.
+- **If the facilitator refuses the proxy's own settings** (an unsupported profile or price, for
+  example), the proxy answers 502 with no `Retry-After`. Retrying won't help until the setting is
+  fixed.
+- **Blank variables use their defaults.** An empty `ACCESS_SECONDS` means 3600, not 0.
 - **A placeholder or malformed `PAY_TO`** is refused, and `/__x402/health` reports it.
 
 ## Develop
