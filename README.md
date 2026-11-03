@@ -93,7 +93,11 @@ A browser gets a short page explaining the payment, with a 402 status and the jo
   SameSite=Lax`. No state is stored.
 - **A rejected or replayed proof** gets a fresh 402 that says why.
 - **If the facilitator is unreachable** or has no live work source, the proxy answers 503 with
-  `Retry-After` (or passes on its 429). Nothing is charged, and nothing reaches your origin.
+  `Retry-After` (or passes on its 429). Nothing reaches your origin. If a settlement response is
+  lost, its outcome is unknown: the facilitator may already have accepted the work.
+- **Malformed facilitator responses** get a 502 instead of granting access or issuing an
+  incomplete challenge. The proxy checks the response envelope, boolean settlement outcome,
+  and required payment headers; mining proof verification remains the facilitator's job.
 - **If the facilitator refuses the proxy's own settings** (an unsupported profile or price, for
   example), the proxy answers 502 with no `Retry-After`. Retrying won't help until the setting is
   fixed.
@@ -106,9 +110,13 @@ A browser gets a short page explaining the payment, with a 402 status and the jo
 npm install
 cp .dev.vars.example .dev.vars   # then edit JWT_SECRET
 npx wrangler dev --var "PAY_TO:0x00…your address"
-npm test                          # bun test: routing, payment and cookie cases
+npm test                          # requires Bun: routing, payment and cookie cases
 npm run typecheck
 ```
+
+The test suite was validated with Bun 1.4.4. It mocks the facilitator and origin and makes no
+network calls. See [Testing the proxy](docs/testing.md) for coverage, regression cases, and
+remaining integration checks.
 
 `src/seller.ts` is the seller half of [x402-work-client](https://x402.qu.ai/docs/sell) 0.4.0,
 ported to TypeScript. It uses only `fetch`, so it runs on Workers without Node APIs.

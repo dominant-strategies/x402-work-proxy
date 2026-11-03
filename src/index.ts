@@ -126,7 +126,7 @@ export default {
 		const gated = url.pathname === RESERVED + "protected" || isProtected(url.pathname, config.patterns);
 		if (!gated) return serve(request, url, config.origin);
 
-		if (config.secret && (await hasAccess(config.secret, url.host, readCookie(request, COOKIE)))) return serve(request, url, config.origin);
+		if (config.secret && config.accessSeconds > 0 && (await hasAccess(config.secret, url.host, readCookie(request, COOKIE)))) return serve(request, url, config.origin);
 
 		let seller;
 		try {
@@ -145,6 +145,8 @@ export default {
 			});
 		} catch (error) {
 			if (!(error instanceof WorkSellerError)) throw error;
+			if (error.code === "invalid_response")
+				return json(502, { error: { message: error.message, code: error.code } });
 			// Outages and rate limits are worth retrying. Anything else means the facilitator refused
 			// this proxy's own settings, which is not the buyer's fault and won't change on retry.
 			if (error.status === 429 || error.status === 503)
